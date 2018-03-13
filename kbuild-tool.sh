@@ -589,15 +589,22 @@ ZSTD="$KBLD_DIR/bin/$uname_m/zstd -T0"
 function print_help()
 {
     echo "Usage: $myname opt"
-    echo "	-C dir		: Change workdir"
+    echo "  -C dir		: Change workdir"
+    echo "  -v			: Boost verbosity"
+    echo "  --log-prefix prefix	: Set log prefix"
+    echo "  --kconfig file	: use this kernel config"
+    echo "  -p|--artprot proto	: set artifact protocol"
+    echo "  --art-root url	: set artifact root_url"
+    echo "  --art-name url	: set artifact path relative to root_url"
+    echo ""
     echo "  Actions:"
-    echo "  art-get [url]	: get artifact"
+    echo "  art-get url		: get artifact"
     echo "  art-put [url]	: put artifact"
     echo "  archive-src		: arcive kernel source to artifact's storage"
     echo "  make-config		: run kernel config"
     echo "  make-binpkg		: make tar-pkg and upload result to artifact"
     echo "  install binpkg	: install kernel from local binpkg"
-    echo "  reboot  boot_entry  : reboot to given boot entry via 'poweroff -r'"
+    echo "  reboot  boot_entry	: reboot to given boot entry via 'poweroff -r'"
     echo "  kexec boot_entry	: reboot to given boot entry via 'kexec'"
     echo "  remote-init  host	: install kbld-tool binaries on given host"
     echo "  remote-install host binpkg_url [--prine][--reboot|--kreboot][--wait]"
@@ -637,7 +644,7 @@ while [ "$1" != "" ]; do
             KBLD_KCONFIG=$2
             shift
             ;;
-        -p|--artifact-proto)
+        -p|--artprot)
             KBLD_ART_PROTO=$2
             shift
             ;;
