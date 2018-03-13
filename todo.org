@@ -1,0 +1,61 @@
+* build steps
+
+** Prep sources
+   upload_git_archive
+   upload_config
+
+** Fetch sources
+   download_sources
+
+** config
+   do_kernel_config $config_file
+
+** build
+   do_kernel_make $target $option
+   upload_tarpkg
+
+** install (on target node)
+   install_req_packages
+   download_tarpkg
+   install_kernel_bin
+   make_initrd
+   modify_boodloader
+   
+** reboot_to (target kernel)
+   get_current_boot_id(on target node)
+   schedule_reboot
+   wait_ssh
+   check_kernel_version
+   check_boot_id changed
+   
+
+* Commands [18/18]
+  - [X] _art_get
+  - [X] _art_put
+  - [X] _art_set_proto
+  - [X] art-get
+  - [X] art-put
+  - [X] archive-src
+  - [X] make-binpkg
+    - [X] _kernel_config config opt
+    - [X] _kernel_make target opt
+    - [X]  remove vmlinux
+  - [X] local-install $binpkg  <$boot_opt>
+    - [X] install tar-pkg
+    - [X] install /lib/modules/$krel/vmlinux.bz2
+    - [X] notify new kernel 
+    - [X] make initrd
+    - [X] add-boot-entry
+  - [ ] make perf-tools
+  - [X] _kernel_prune_local
+  - [X] _kernel_reboot_local $entry $method $wait $async
+  - [X] _kernel_install_remote $url $host
+  - [X] _wait_reboot $host $old_bootid
+  - [X] _reboot_remote $host $krel $method
+  - [X] reboot --wait|--nowait
+  - [X] kexec  --wait|--nowait
+  - [X] remote-init
+  - [X] remote-install host --prune --reboot|--kexec --wait|--nowait
+  - [X] remote-reboot --wait|--nowait
+  - [X] remote-kexec  --wait|--nowait
+
