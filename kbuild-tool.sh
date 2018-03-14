@@ -43,6 +43,16 @@ function _assert_args()
     [ "$got" -le "$max" ] || _fail "Bad number of arguments, expect[$min, $max], got $got"
 }
 
+
+function log_wall()
+{
+    if [ "$KBLD_LOG_LEVEL" -ge 1 ]
+    then
+        echo "${KBLD_LOG_PREFIX}$*"
+        wall "$@"
+    fi
+}
+
 function log_info()
 {
     if [ "$KBLD_LOG_LEVEL" -ge 1 ]
@@ -57,6 +67,12 @@ function log_dbg()
     then
         echo "${KBLD_LOG_PREFIX}$*"
     fi
+}
+
+function call_verbose()
+{
+    log_wall "exec: $*"
+    eval "$@"
 }
 
 ######################################
@@ -278,7 +294,7 @@ function _install_deps_remote()
     then
         $SSH $host "[ -d $KBLD_DIR ] && rm -rf $KBLD_DIR || /bin/true"
         $SSH $host "mkdir -p $KBLD_DIR"
-        tar cz $KBLD_DIR | $SSH $host "tar mzx -C /"
+        tar cz $KBLD_DIR 2>/dev/null | $SSH $host "tar mzx -C /"
     fi
 
 }
@@ -358,7 +374,7 @@ function _kernel_install_local()
     [ "$grub_index" = "0" ] || _fail "Unexpected boot index for /boot/vmlinuz-$krel, want:0, got: $grub_index"
 }
 
-function _get_grub_info
+function _get_grub_info()
 {
     _assert_args $# 1
     #TODO: Silance #SC2154
@@ -383,12 +399,14 @@ function _get_grub_info
     true
 }
 
-function delay_exec
+function delay_exec()
 {
-    _assert_args $# 1 256
+    _assert_args $# 2 256
     local delay=$1
-    shift
+    local verbose=$2
+    shift; shift
 
+    [ "$verbose" -eq 1 ] && log_wall "exec: $*"
     if [ "$delay" -eq 0 ]
     then
         sh -c "$*"
@@ -422,16 +440,17 @@ function _kernel_reboot_local()
 
     case $method in
         grub)
+            log_wall "exec: grub-reboot $grub_index"
             savedefault --default=$grub_index --once | grub --batch > /dev/null
-            delay_exec $delay 'shutdown -r now'
+            delay_exec $delay 1 'shutdown -r now'
             ;;
         grub2)
-            grub2-reboot $grub_index
-            delay_exec $delay 'shutdown -r now'
+            call_verbose grub2-reboot $grub_index
+            delay_exec $delay 1 'shutdown -r now'
             ;;
         kexec)
-            kexec -l "$grub_kernel" --initrd="$grub_initrd" --command-line="root=$grub_root $grub_args"
-            delay_exec $delay 'systemctl kexec'
+            call_verbose kexec -l "$grub_kernel" --initrd="$grub_initrd" --command-line="root=$grub_root $grub_args"
+            delay_exec $delay 1 'systemctl kexec'
             ;;
         *)
             _fail "Unknown reboot method: $method"
