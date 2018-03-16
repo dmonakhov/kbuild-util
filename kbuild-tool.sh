@@ -229,6 +229,8 @@ function _kernel_config()
 
     # It is always good to have ikconfig embedded
     ./scripts/config -e IKCONFIG
+    ./scripts/config -e IKCONFIG_PROC
+
     [ -z "$KBLD_NO_LOCALVERSION_AUTO" ] && [ -e ".scmversion" ] && \
            ./scripts/config -e LOCALVERSION_AUTO
 
@@ -250,7 +252,7 @@ function _kernel_make()
 function make_binpkg()
 {
     _assert_args $# 0
-    
+
     _kernel_config $KBLD_KCONFIG
     _kernel_make tar-pkg
 
@@ -330,10 +332,10 @@ function _kernel_install_local()
 
     local binpkg=$1
     local boot_opt=$2
-    
+
     local tmp=$(mktemp /tmp/kbuild-tool-XXXXX)
     local pref_msg=""
-    
+
     [ -f "$binpkg" ] || _fail "Can not find bin-pkg at:$binpkg"
     [ -n "$KBLD_PRUNE_OLD" ] && _kernel_prune_old
 
@@ -342,7 +344,7 @@ function _kernel_install_local()
     krel=${config:12}
     [ -z "$krel" ] && _fail "Can not determine kernelrelease from config: $config"
     unlink $tmp
-    
+
     depmod $krel
     mkinitrd -f /boot/initramfs-$krel.img $krel $KBLD_MKINITRD_OPT
 
@@ -370,7 +372,6 @@ function _kernel_install_local()
 
     # ASSUMPTION: new kernel always has index=0, is this always correct?
     _get_grub_info "/boot/vmlinuz-$krel"
-    echo "Check idx"
     [ "$grub_index" = "0" ] || _fail "Unexpected boot index for /boot/vmlinuz-$krel, want:0, got: $grub_index"
 }
 
@@ -508,7 +509,7 @@ function _reboot_remote()
 
     _remote_exec "$host" "$method" "/boot/vmlinuz-$krel"
     [ -z "$wait" ] && return
-    
+
     _wait_reboot $host $o_bootid
     n_krel=$($SSH $host "uname -r")
     n_bootid=$($SSH $host 'cat /proc/sys/kernel/random/boot_id')
@@ -526,14 +527,13 @@ function do_remote_install()
     local url=${2%%/linux-binpkg.tar.zstd}
     local prune=""
     local need_reboot=""
-    
+
     [ -z "$host" ] && _usage_and_fail "remote-install require 'host' as an option"
     [ -z "$url" ] && _usage_and_fail "remote-install require 'url' as an option"
-        
+
     shift
     shift
-    echo "ARGS: $*"
-    echo "ARG: $1"
+
     while [ "$1" != "" ]; do
         case $1 in
             --prune)
@@ -559,7 +559,7 @@ function do_remote_install()
         esac
         shift
     done
-   
+
     _install_deps_remote $host
     [ "$prune" == t ] && _remote_exec $host prune
     _art_get $url/linux-binpkg.tar.zstd $TMP_DIR/linux-binpkg.tar.zstd
@@ -570,6 +570,46 @@ function do_remote_install()
     $SSH $host "rm -rf $TMP_DIR"
     # Assume that fresh kernel has index 0
     [ "$need_reboot" == "t" ] && _reboot_remote $host $method 0 $KBLD_REMOTE_WAIT
+}
+
+function do_remote_config()
+{
+    _assert_args $# 2 6
+    local tgt=$1
+    local host=$2
+    local merge=""
+
+    [ -z "$host" ] && _usage_and_fail "remote-install require 'host' as an option"
+    [ -z "$tgt" ] && _usage_and_fail "remote-install require 'tgt' as an option"
+
+    shift
+    shift
+    echo "ARGS: $*"
+    echo "ARG: $1"
+    while [ "$1" != "" ]; do
+        case $1 in
+            --merge)
+                merge=t
+                ;;
+            *)
+                _fail "Unknown option $1"
+                ;;
+        esac
+        shift
+    done
+
+    _install_deps_remote $host
+    $SSH $host "lsmod" > $TMP_DIR/lsmod.txt
+    [ -e ".config" ] && [ -n "$merge" ]  && cp .config $TMP_DIR/config.orig
+    make LSMOD=$TMP_DIR/lsmod.txt $tgt
+
+    if [ -e $TMP_DIR/config.orig ]
+    then
+        cp .config $TMP_DIR/config.new
+        #TODO: merge_config.sh is slow as hell due to O(N^2) complexity
+        #it should be a better way to merge two configs
+        scripts/kconfig/merge_config.sh $TMP_DIR/config.old $TMP_DIR/config.new
+    fi
 }
 
 function _lookup_config()
@@ -632,6 +672,8 @@ function print_help()
     echo "			: reboot and wait remote host"
     echo "  remote-kexec host boot_entry   [--wait|--nowait]"
     echo "			: kexec and wait remote host"
+    echo "  remote-modconfig host [ --merge] : run localmodconfig based on remote host lsmod"
+    echo "  remote-yesconfig host [ --merge] : run localyesconfig based on remote host lsmod"
     exit 1
 }
 
@@ -738,7 +780,7 @@ case ${action} in
         [ -z "$1" ] && _usage_and_fail "$action require 'host' as an option"
         _install_deps_remote "$@"
         ;;
-    
+
     remote-install)
         do_remote_install "$@"
         ;;
@@ -763,6 +805,14 @@ case ${action} in
 
         _install_deps_remote $host
         _reboot_remote $host kexec $entry $KBLD_REMOTE_WAIT
+        ;;
+    remote-modconfig)
+        host=$1
+        do_remote_config localmodconfig "$@"
+        ;;
+    remote-yesconfig)
+        host=$1
+        do_remote_config localyesconfig "$@"
         ;;
     *)
         print_help
