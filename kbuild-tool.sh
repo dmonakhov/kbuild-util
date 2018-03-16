@@ -459,6 +459,19 @@ function _kernel_reboot_local()
     esac
 }
 
+
+function _guest_config()
+{
+    for sys in net block;
+    do
+        for i in $(ls /sys/class/$sys)
+        do
+            udevadm info -a -p /sys/class/$sys/$i | grep -oP 'DRIVERS?=="\K[^"]+' >> $TMP_DIR/modules.txt || true
+        done
+    done
+    cat $TMP_DIR/modules.txt | sort | uniq
+}
+
 #function _kernel_install_remote()
 #{
 #    _assert_args $# 2 3
@@ -775,6 +788,9 @@ case ${action} in
         ;;
     kexec)
         _kernel_reboot_local kexec "$1"
+        ;;
+    guess-config)
+        _guest_config "$@"
         ;;
     remote-init)
         [ -z "$1" ] && _usage_and_fail "$action require 'host' as an option"
